@@ -1,0 +1,17 @@
+version: '3'
+
+services:
+  db:
+    image: mysql:5.7
+    restart: always
+    container_name: mercury_db
+    environment:
+      MYSQL_DATABASE: mercury
+      MYSQL_ROOT_PASSWORD: mercury
+    ports:
+      - "3456:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+
+volumes:
+  db_data:
