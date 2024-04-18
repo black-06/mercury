@@ -1,3 +1,4 @@
+from typing import Optional
 from fastapi import APIRouter
 import models.task as taskModel
 
@@ -8,7 +9,7 @@ router = APIRouter(
 
 
 @router.get("")
-async def get_tasks(task_id: int | None = None):
+async def get_tasks(task_id: Optional[int] = None):
     print("get_tasks, task_id:", task_id)
     res = await taskModel.query_task(task_id)
     print("get_tasks, res:", res)

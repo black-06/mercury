@@ -11,7 +11,7 @@ class Task(ormar.Model):
     res: any = ormar.JSON(default={})
 
 
-def query_task(task_id: int | None):
+def query_task(task_id: Optional[int]):
     if task_id is None:
         return Task.objects.all()  # TODO this is sloppy
     return Task.objects.filter(id=task_id).all()
