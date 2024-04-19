@@ -24,13 +24,14 @@ async def infer_audio(
     audio_profile: Optional[str] = None,
     audio_path: Optional[str] = None,
     model_id: Optional[str] = None,
+    user: Optional[str] = None,
 ):
     print(text, audio_profile, audio_path, model_id)
     file_path = ""
     if text is not None:
         file_path = await azure_tts(text, audio_profile)
     else:
-        file_path = await rvc_infer(audio_path, model_id)
+        file_path = await rvc_infer(audio_path, model_id, user)
     return FileResponse(file_path)
 
 
@@ -78,8 +79,16 @@ async def azure_tts(
 
 
 async def rvc_infer(audio_path: str, model_id: str, user: str):
-    # TODO make rvc callable by command
-    pass
+    response = requests.post(
+        "http://127.0.0.1:3334/rvc?model_id="
+        + model_id
+        + "&user="
+        + user
+        + "&audio_path="
+        + audio_path,
+    )
+    return response.json()
+
 
 
 @router.post("/video")
