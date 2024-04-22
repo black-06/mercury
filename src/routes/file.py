@@ -7,22 +7,18 @@ router = APIRouter(
     prefix="/file",
 )
 
-@router.post("/upload/video")
+@router.post("/upload")
 async def upload_video(
     file: UploadFile,
     model_id: int,
 ):
-    _, ext = os.path.splitext(file.filename)  
-    if ext.lower() != '.mp4':
-        return {"message": "file type not supported"}
-    
     user_id = 1  # get user id from token
     model_path = "user-key/model" # get model path by model
-    row_path = f"{model_path}/row"
-    path = os.path.join( row_path, file.filename) 
+    raw_path = f"{model_path}/raw"
+    path = os.path.join( raw_path, file.filename) 
     
     await save_file(file, path)
-    return await FileModel.create_file(path, user_id) 
+    return await FileModel.create_file(path, user_id)
 
 
 @router.get("/download")  
