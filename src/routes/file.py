@@ -1,8 +1,8 @@
 from fastapi import APIRouter, UploadFile
 from urllib.parse import quote
 import os
+from starlette.responses import FileResponse
 
-from fastapi.responses import FileResponse
 from infra.file import WORKSPACE, save_file
 import models.file as FileModel
 
@@ -48,7 +48,6 @@ async def download(file_id: int):
 
     return FileResponse(
         os.path.join(WORKSPACE, res.path),
-        headers={
-            "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_basename}"
-        },
+        media_type="application/octet-stream",
+        filename=encoded_basename,
     )
