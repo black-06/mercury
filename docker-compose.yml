@@ -8,10 +8,20 @@ services:
     environment:
       MYSQL_DATABASE: mercury
       MYSQL_ROOT_PASSWORD: mercury
-    ports:
-      - "3456:3306"
     volumes:
       - db_data:/var/lib/mysql
+      - ./conf.d:/etc/mysql/conf.d
+    network_mode: host
+  mercury:
+    image: mercury:latest
+    restart: always
+    container_name: mercury
+    volumes:
+      - .env:/app/.env
+      - /data:/data
+      - /tmp:/tmp
+    network_mode: host
+
 
 volumes:
   db_data:

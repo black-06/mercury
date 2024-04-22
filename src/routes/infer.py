@@ -5,12 +5,9 @@ from fastapi import APIRouter
 import azure.cognitiveservices.speech as speechsdk
 import requests
 
-
 from fastapi.responses import FileResponse
 
-# TODO: read from .env
-SPEECH_KEY = "ddd96a5781a64d44aea306651a1235d7"
-SPEECH_REGION = "eastasia"
+from infra.config import AZURE_SPEECH_KEY, AZURE_SPEECH_REGION
 
 
 router = APIRouter(
@@ -46,7 +43,7 @@ async def azure_tts(
     file_path = "/tmp/" + audio_file_name
 
     speech_config = speechsdk.SpeechConfig(
-        subscription=SPEECH_KEY, region=SPEECH_REGION
+        subscription=AZURE_SPEECH_KEY, region=AZURE_SPEECH_REGION
     )
     audio_config = speechsdk.audio.AudioOutputConfig(
         use_default_speaker=True, filename=file_path
@@ -88,7 +85,6 @@ async def rvc_infer(audio_path: str, model_id: str, user: str):
         + audio_path,
     )
     return response.json()
-
 
 
 @router.post("/video")

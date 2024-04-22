@@ -6,3 +6,9 @@ init:
 
 update_env:
 	conda env export > environment.yml
+
+build:
+	docker build -t mercury .
+
+restart:
+	docker compose down && docker compose up -d

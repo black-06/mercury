@@ -1,8 +1,7 @@
 import databases
 import ormar
 import sqlalchemy
-
-DATABASE_URL = "mysql://root:mercury@0.0.0.0:3456/mercury"  # TODO: read from .env
+from infra.config import DATABASE_URL
 
 database = databases.Database(DATABASE_URL)
 metadata = sqlalchemy.MetaData()
