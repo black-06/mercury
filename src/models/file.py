@@ -12,13 +12,13 @@ class File(ormar.Model):
 
 def query_file(
     file_id: Optional[int],
-    path: Optional[str],
+    path: Optional[str] = None,
 ):
     if file_id is not None:
         return File.objects.filter(id=file_id).first()
     if path is not None:
         return File.objects.filter(path=path).first()
-    return File.objects.all()
+    raise ValueError("file_id or path must be provided")
 
 async def create_file(path: str, user_id: int):
     return await File.objects.create(path=path, user_id=user_id)
