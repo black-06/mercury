@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from infra.db import database, metadata, engine
 from routes.task import router as taskRouter
 from routes.infer import router as inferRouter
+from routes.file import router as fileRouter
 
 
 @asynccontextmanager
@@ -17,3 +18,4 @@ app = FastAPI(lifespan=lifespan)
 
 app.include_router(taskRouter)
 app.include_router(inferRouter)
+app.include_router(fileRouter)
