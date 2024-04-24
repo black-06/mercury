@@ -12,6 +12,15 @@ services:
       - db_data:/var/lib/mysql
       - ./conf.d:/etc/mysql/conf.d
     network_mode: host
+  redis:
+    image: redis:latest
+    restart: always
+    container_name: mercury_redis
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6345:6345"
+    command: --port 6345 --requirepass mercury
   mercury:
     image: mercury:latest
     restart: always
@@ -25,3 +34,4 @@ services:
 
 volumes:
   db_data:
+  redis_data:
