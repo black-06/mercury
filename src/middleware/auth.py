@@ -9,9 +9,17 @@ def getUserInfo(request: Request):
     return getattr(request.state, "user", None)
 
 
+noAuthPath = [
+    "/openapi.json",
+    "/user/login",
+    "/docs",
+]
+
+
 class AuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
-        if request.url.path == "/user/login":
+
+        if noAuthPath.__contains__(request.url.path):
             return await call_next(request)
 
         token = request.headers.get("Authorization")

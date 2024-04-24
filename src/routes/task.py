@@ -1,6 +1,7 @@
 from typing import Optional
 from fastapi import APIRouter
 import models.task as taskModel
+from infra.logger import logger
 
 
 router = APIRouter(
@@ -10,9 +11,9 @@ router = APIRouter(
 
 @router.get("")
 async def get_tasks(task_id: Optional[int] = None):
-    print("get_tasks, task_id:", task_id)
+    logger.debug("get_tasks, task_id:", task_id)
     res = await taskModel.query_task(task_id)
-    print("get_tasks, res:", res)
+    logger.debug("get_tasks, res:", res)
     return res
 
 
