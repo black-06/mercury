@@ -14,11 +14,12 @@ def query_file(
     file_id: Optional[int],
     path: Optional[str] = None,
 ):
+    q = File.objects
     if file_id is not None:
-        return File.objects.filter(id=file_id).first()
+        q = q.filter(id=file_id)
     if path is not None:
-        return File.objects.filter(path=path).first()
-    raise ValueError("file_id or path must be provided")
+        q = q.filter(path=path)
+    return q.first()
 
 async def create_file(path: str, user_id: int):
     return await File.objects.create(path=path, user_id=user_id)

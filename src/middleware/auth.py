@@ -3,6 +3,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi import Request, status
 from infra.token import check_token, decode_token
 from infra.logger import logger
+import re
 
 
 def getUserInfo(request: Request):
@@ -13,13 +14,14 @@ noAuthPath = [
     "/openapi.json",
     "/user/login",
     "/docs",
+    "/internal.*"
 ]
 
 
 class AuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
 
-        if noAuthPath.__contains__(request.url.path):
+        if any(re.match(pattern, request.url.path) for pattern in noAuthPath):
             return await call_next(request)
 
         token = request.headers.get("Authorization")

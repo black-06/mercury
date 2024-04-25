@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Any, Optional
 import ormar
 from infra.db import base_ormar_config
 from infra.token import get_token, gen_token, set_token
@@ -33,9 +33,9 @@ async def create_user(account, password):
     return user
 
 
-async def update_user(user_id: int, user: User):
+async def update_user(user_id: int, **kwargs: Any):
     t = await user.objects.get(id=user_id)
-    user = await t.update()
+    user = await t.update(**kwargs)
     user.password = ""
     return user
 

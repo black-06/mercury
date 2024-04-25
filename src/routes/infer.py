@@ -1,13 +1,17 @@
+import os
 from typing import Optional
 import uuid
-from fastapi import APIRouter
-
+from fastapi import APIRouter, Request, HTTPException
 import azure.cognitiveservices.speech as speechsdk
+from fastapi.responses import JSONResponse, PlainTextResponse
+from pydantic import BaseModel
 import requests
-
-from fastapi.responses import FileResponse
-
+from starlette.responses import FileResponse
 from infra.config import AZURE_SPEECH_KEY, AZURE_SPEECH_REGION
+from middleware.auth import getUserInfo
+from infra.logger import logger
+from models.file import create_file
+from models.task import Task, TaskStatus, create_task, update_task
 
 
 router = APIRouter(
@@ -36,8 +40,6 @@ async def azure_tts(
     text: str,
     audio_profile: str,
 ):
-    print(text, audio_profile)
-
     # randome file name for the audio file
     audio_file_name = str(uuid.uuid4()) + ".wav"
     file_path = "/tmp/" + audio_file_name
@@ -89,6 +91,7 @@ async def rvc_infer(audio_path: str, model_id: str, user: str):
 
 @router.post("/video")
 async def infer_video(user: str, model_id: str, task: str):
+    return PlainTextResponse("WIP")
     response = requests.post(
         "http://127.0.0.1:8000/talking-head/inference",
         json={
@@ -97,3 +100,73 @@ async def infer_video(user: str, model_id: str, task: str):
         headers={"Content-Type": "application/json"},
     )
     return FileResponse(response.json()["path"])
+
+
+class Config:
+    protected_namespaces = ()
+
+
+class Text2VideoRequest(BaseModel):
+    class Config(Config):
+        pass
+
+    text: str
+    model_id: str
+    audio_profile: str = "zh-CN-YunxiNeural (Male)"
+
+
+@router.post("/text2video")
+async def infer_text2video(body: Text2VideoRequest, req: Request):
+    user = getUserInfo(req)
+    logger.debug("user: %s", user)
+
+    task = await create_task()
+
+    output_dir_path = os.path.join(
+        "/data",
+        "prod",
+        str(user["user_id"]),
+        body.model_id,
+        "generated",
+        str(task.id),
+    )
+    output_video_path = os.path.join(output_dir_path, f"{task.id}.mp4")
+
+    file = await create_file(output_video_path, user["user_id"])
+
+    await update_task(
+        task.id,
+        status=TaskStatus.PENDING,
+        res={
+            "output_video_file_id": file.id,
+        },
+    )
+
+
+    file_path = await azure_tts(body.text, body.audio_profile)
+
+    file_path = await rvc_infer(file_path, body.model_id, str(user["user_id"]))
+
+    # infer video asyncously
+    response = requests.post(
+        "http://0.0.0.0:8000/talking-head/inference",
+        json={
+            "input_audio_path": file_path,
+            "output_video_path": output_video_path,
+            "speaker": "demo/law_firm",
+            "callback_url": f"http://0.0.0.0:3333/internal/task/{task.id}",
+            "callback_method": "put",
+        },
+        headers={"Content-Type": "application/json"},
+    )
+
+    if not response.ok:
+        raise HTTPException(status_code=response.status_code, detail=response.json())
+
+    logger.debug(f"response code: {response.status_code}")
+
+    return JSONResponse(
+        {
+            "task_id": task.id,
+        }
+    )

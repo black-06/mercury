@@ -1,9 +1,9 @@
-from fastapi import APIRouter, UploadFile
+from fastapi import APIRouter, Request, UploadFile
 from urllib.parse import quote
 import os
 from starlette.responses import FileResponse
-
 from infra.file import WORKSPACE, save_file
+from middleware.auth import getUserInfo
 import models.file as FileModel
 
 router = APIRouter(
@@ -15,8 +15,10 @@ router = APIRouter(
 async def upload_video(
     file: UploadFile,
     model_id: str,
+    req: Request,
 ):
-    user_id = 1  # TODO get user id from token
+    user = getUserInfo(req)
+    user_id = user["user_id"]
 
     raw_dir_path = os.path.join(
         str(user_id),
@@ -35,8 +37,10 @@ async def upload_video(
 
 
 @router.get("/download")
-async def download(file_id: int):
-    user_id = 1  # TODO get user id from token
+async def download(file_id: int, req: Request):
+    user = getUserInfo(req)
+    user_id = user["user_id"]
+
     res = await FileModel.query_file(file_id)
     if not res:
         return {"message": "file not found"}

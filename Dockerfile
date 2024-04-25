@@ -11,4 +11,4 @@ WORKDIR /app/src
 
 COPY ./src /app/src
 
-entrypoint uvicorn main:app --host 0.0.0.0 --port 3333
+ENTRYPOINT uvicorn main:app --host 0.0.0.0 --port 3333

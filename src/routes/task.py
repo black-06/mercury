@@ -11,9 +11,7 @@ router = APIRouter(
 
 @router.get("")
 async def get_tasks(task_id: Optional[int] = None):
-    logger.debug("get_tasks, task_id:", task_id)
     res = await taskModel.query_task(task_id)
-    logger.debug("get_tasks, res:", res)
     return res
 
 
@@ -24,7 +22,7 @@ async def create_task():
 
 @router.put("/{task_id}")
 async def update_task(task_id: int, task: taskModel.Task):
-    return await taskModel.update_task(task_id, taskModel.Task(status=task.status))
+    return await taskModel.update_task(task_id, status=task.status)
 
 
 @router.delete("/{task_id}")

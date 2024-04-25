@@ -1,20 +1,31 @@
-from typing import Optional
+import datetime
+from typing import Any, Optional
 import ormar
 from infra.db import database, metadata, base_ormar_config
+from enum import Enum
+
+
+class TaskStatus(int, Enum):
+    UNKNOWN = 0
+    PENDING = 1
+    SUCCEEDED = 2
+    FAILED = 3
 
 
 class Task(ormar.Model):
     ormar_config = base_ormar_config.copy(tablename="task")
 
     id: Optional[int] = ormar.Integer(primary_key=True, autoincrement=True)
-    status: Optional[int] = ormar.Integer(default=0)  # TODO enums
+    status: Optional[TaskStatus] = ormar.Enum(enum_class=TaskStatus)
     res: any = ormar.JSON(default={})
+    create_time: datetime.datetime = ormar.DateTime(default=datetime.datetime.now)
 
 
 def query_task(task_id: Optional[int]):
-    if task_id is None:
-        return Task.objects.all()  # TODO this is sloppy
-    return Task.objects.filter(id=task_id).all()
+    q = Task.objects
+    if task_id is not None:
+        q = q.filter(id=task_id)
+    return q.all()
 
 
 def delete_task(task_id: int):
@@ -22,10 +33,10 @@ def delete_task(task_id: int):
 
 
 async def create_task():
-    return await Task.objects.create(status=1, res={})
+    return await Task.objects.create(status=TaskStatus.PENDING, res={})
 
 
-async def update_task(task_id: int, task: Task):
+async def update_task(task_id: int, **kwargs: Any):
     t = await Task.objects.get(id=task_id)
-    t.status = task.status
-    return await t.update()
+    return await t.update(**kwargs)
+
