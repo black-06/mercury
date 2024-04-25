@@ -14,7 +14,7 @@ router = APIRouter(
 @router.post("/upload")
 async def upload_video(
     file: UploadFile,
-    model_id: str,
+    model_name: str,
     req: Request,
 ):
     user = getUserInfo(req)
@@ -22,7 +22,7 @@ async def upload_video(
 
     raw_dir_path = os.path.join(
         str(user_id),
-        model_id,
+        model_name,
         "task",
         "raw",
     )

@@ -11,7 +11,8 @@ from infra.config import AZURE_SPEECH_KEY, AZURE_SPEECH_REGION
 from middleware.auth import getUserInfo
 from infra.logger import logger
 from models.file import create_file
-from models.task import Task, TaskStatus, create_task, update_task
+from models.task import TaskStatus, create_task, update_task
+from models.model import query_model
 
 
 router = APIRouter(
@@ -77,10 +78,11 @@ async def azure_tts(
     return file_path
 
 
-async def rvc_infer(audio_path: str, model_id: str, user: str):
+async def rvc_infer(audio_path: str, model_name: str, user: str):
+    # TODO use output dir instead of user + model
     response = requests.post(
         "http://127.0.0.1:3334/rvc?model_id="
-        + model_id
+        + model_name
         + "&user="
         + user
         + "&audio_path="
@@ -111,7 +113,7 @@ class Text2VideoRequest(BaseModel):
         pass
 
     text: str
-    model_id: str
+    model_name: str
     audio_profile: str = "zh-CN-YunxiNeural (Male)"
 
 
@@ -120,16 +122,26 @@ async def infer_text2video(body: Text2VideoRequest, req: Request):
     user = getUserInfo(req)
     logger.debug("user: %s", user)
 
+    models = await query_model(name=body.model_name)
+    model = models[0]
+    if model is None:
+        raise HTTPException(
+            status_code=404, detail=f"model {body.model_name} not found"
+        )
+
     task = await create_task()
 
     output_dir_path = os.path.join(
         "/data",
         "prod",
         str(user["user_id"]),
-        body.model_id,
+        body.model_name,
         "generated",
         str(task.id),
     )
+    if not os.path.exists(output_dir_path):
+        os.makedirs(output_dir_path)
+
     output_video_path = os.path.join(output_dir_path, f"{task.id}.mp4")
 
     file = await create_file(output_video_path, user["user_id"])
@@ -142,10 +154,9 @@ async def infer_text2video(body: Text2VideoRequest, req: Request):
         },
     )
 
-
     file_path = await azure_tts(body.text, body.audio_profile)
 
-    file_path = await rvc_infer(file_path, body.model_id, str(user["user_id"]))
+    file_path = await rvc_infer(file_path, model.audio_model, str(user["user_id"]))
 
     # infer video asyncously
     response = requests.post(
@@ -153,7 +164,7 @@ async def infer_text2video(body: Text2VideoRequest, req: Request):
         json={
             "input_audio_path": file_path,
             "output_video_path": output_video_path,
-            "speaker": "demo/law_firm",
+            "speaker": model.video_model,
             "callback_url": f"http://0.0.0.0:3333/internal/task/{task.id}",
             "callback_method": "put",
         },

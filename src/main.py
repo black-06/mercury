@@ -7,6 +7,7 @@ from routes.infer import router as inferRouter
 from routes.file import router as fileRouter
 from routes.user import router as userRouter
 from routes.internal import router as internalRouter
+from routes.model import router as modelRouter
 
 
 @asynccontextmanager
@@ -26,3 +27,4 @@ app.include_router(inferRouter)
 app.include_router(fileRouter)
 app.include_router(userRouter)
 app.include_router(internalRouter)
+app.include_router(modelRouter)
