@@ -13,6 +13,7 @@ from infra.logger import logger
 from models.file import create_file
 from models.task import TaskStatus, create_task, update_task
 from models.model import query_model
+from utils.file import createDir
 
 
 router = APIRouter(
@@ -20,30 +21,59 @@ router = APIRouter(
 )
 
 
+def gen_output_dir(model: str, user_id: int, task_id: int):
+    output_dir_path = os.path.join(
+        "/data",
+        "prod",
+        str(user_id),
+        model,
+        "generated",
+        str(task_id),
+    )
+    createDir(output_dir_path)
+    return output_dir_path
+
+
 @router.post("/audio")
 async def infer_audio(
+    req: Request,
     text: Optional[str] = None,
     audio_profile: Optional[str] = None,
     audio_path: Optional[str] = None,
-    model_id: Optional[str] = None,
-    user: Optional[str] = None,
+    model_name: Optional[str] = None,
 ):
-    print(text, audio_profile, audio_path, model_id)
+
+    models = await query_model(name=model_name)
+    model = models[0]
+    if model is None:
+        raise HTTPException(status_code=404, detail=f"model {model_name} not found")
+
+    user = getUserInfo(req)
+    task = await create_task()
+    output_dir = gen_output_dir(model.name, user["user_id"], task.id)
+
+    logger.debug(
+        "text: %s, audio_profile: %s, audio_path: %s, model_name: %s, user: %s",
+        text,
+        audio_profile,
+        audio_path,
+        model_name,
+        user,
+    )
     file_path = ""
     if text is not None:
-        file_path = await azure_tts(text, audio_profile)
+        file_path = await azure_tts(text, audio_profile, output_dir)
     else:
-        file_path = await rvc_infer(audio_path, model_id, user)
+        file_path = await rvc_infer(
+            audio_path, model.audio_model, os.path.join(output_dir, f"{task.id}.wav")
+        )
     return FileResponse(file_path)
 
 
-async def azure_tts(
-    text: str,
-    audio_profile: str,
-):
+async def azure_tts(text: str, audio_profile: str, output_dir: str):
     # randome file name for the audio file
-    audio_file_name = str(uuid.uuid4()) + ".wav"
-    file_path = "/tmp/" + audio_file_name
+    audio_file_name = "azure_" + str(uuid.uuid4()) + ".wav"
+    file_path = os.path.join(output_dir, audio_file_name)
 
     speech_config = speechsdk.SpeechConfig(
         subscription=AZURE_SPEECH_KEY, region=AZURE_SPEECH_REGION
@@ -72,22 +102,26 @@ async def azure_tts(
         print("Speech synthesis canceled: {}".format(cancellation_details.reason))
         if cancellation_details.reason == speechsdk.CancellationReason.Error:
             if cancellation_details.error_details:
-                raise Exception(
-                    "Error details: {}".format(cancellation_details.error_details)
+                raise HTTPException(
+                    status_code=500,
+                    detail="Error details: {}".format(
+                        cancellation_details.error_details
+                    ),
                 )
     return file_path
 
 
-async def rvc_infer(audio_path: str, model_name: str, user: str):
-    # TODO use output dir instead of user + model
+async def rvc_infer(audio_path: str, model_name: str, output_path: str):
     response = requests.post(
-        "http://127.0.0.1:3334/rvc?model_id="
+        "http://127.0.0.1:3334/rvc?model_name="
         + model_name
-        + "&user="
-        + user
+        + "&output_path="
+        + output_path
         + "&audio_path="
         + audio_path,
     )
+    if not response.ok:
+        raise HTTPException(status_code=response.status_code, detail=response.text())
     return response.json()
 
 
@@ -131,18 +165,10 @@ async def infer_text2video(body: Text2VideoRequest, req: Request):
 
     task = await create_task()
 
-    output_dir_path = os.path.join(
-        "/data",
-        "prod",
-        str(user["user_id"]),
-        body.model_name,
-        "generated",
-        str(task.id),
-    )
-    if not os.path.exists(output_dir_path):
-        os.makedirs(output_dir_path)
+    output_dir_path = gen_output_dir(model.name, user["user_id"], task.id)
 
     output_video_path = os.path.join(output_dir_path, f"{task.id}.mp4")
+    output_audio_path = os.path.join(output_dir_path, f"{task.id}.wav")
 
     file = await create_file(output_video_path, user["user_id"])
 
@@ -156,7 +182,7 @@ async def infer_text2video(body: Text2VideoRequest, req: Request):
 
     file_path = await azure_tts(body.text, body.audio_profile)
 
-    file_path = await rvc_infer(file_path, model.audio_model, str(user["user_id"]))
+    file_path = await rvc_infer(file_path, model.audio_model, output_audio_path)
 
     # infer video asyncously
     response = requests.post(

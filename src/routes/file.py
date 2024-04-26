@@ -23,12 +23,8 @@ async def upload_video(
     raw_dir_path = os.path.join(
         str(user_id),
         model_name,
-        "task",
-        "raw",
+        "_raw",
     )
-
-    # make dir if not exist
-    os.makedirs(raw_dir_path, exist_ok=True)
 
     file_path = os.path.join(raw_dir_path, file.filename)
 
