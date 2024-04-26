@@ -121,7 +121,7 @@ async def rvc_infer(audio_path: str, model_name: str, output_path: str):
         + audio_path,
     )
     if not response.ok:
-        raise HTTPException(status_code=response.status_code, detail=response.text())
+        raise HTTPException(status_code=response.status_code, detail=response.text)
     return response.json()
 
 
@@ -180,7 +180,7 @@ async def infer_text2video(body: Text2VideoRequest, req: Request):
         },
     )
 
-    file_path = await azure_tts(body.text, body.audio_profile)
+    file_path = await azure_tts(body.text, body.audio_profile, output_dir_path)
 
     file_path = await rvc_infer(file_path, model.audio_model, output_audio_path)
 

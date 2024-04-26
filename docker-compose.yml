@@ -28,6 +28,7 @@ services:
     volumes:
       - .env:/app/.env
       - /data:/data
+      - /home:/home
       - /tmp:/tmp
     network_mode: host
 
