@@ -65,7 +65,7 @@ async def infer_audio(
         file_path = await azure_tts(text, audio_profile, output_dir)
     else:
         file_path = await rvc_infer(
-            audio_path, model.audio_model, os.path.join(output_dir, f"{task.id}.wav")
+            audio_path, model.audio_model, os.path.join(output_dir, f"{task.id}.wav", model.audio_config["pitch"])
         )
     return FileResponse(file_path)
 
@@ -111,14 +111,16 @@ async def azure_tts(text: str, audio_profile: str, output_dir: str):
     return file_path
 
 
-async def rvc_infer(audio_path: str, model_name: str, output_path: str):
+async def rvc_infer(audio_path: str, model_name: str, output_path: str, pitch: int = 0):
     response = requests.post(
         "http://127.0.0.1:3334/rvc?model_name="
         + model_name
         + "&output_path="
         + output_path
         + "&audio_path="
-        + audio_path,
+        + audio_path
+        + "&pitch="
+        + str(pitch),
     )
     if not response.ok:
         raise HTTPException(status_code=response.status_code, detail=response.text)
@@ -182,7 +184,7 @@ async def infer_text2video(body: Text2VideoRequest, req: Request):
 
     file_path = await azure_tts(body.text, body.audio_profile, output_dir_path)
 
-    file_path = await rvc_infer(file_path, model.audio_model, output_audio_path)
+    file_path = await rvc_infer(file_path, model.audio_model, output_audio_path, model.audio_config["pitch"])
 
     # infer video asyncously
     response = requests.post(
