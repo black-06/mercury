@@ -33,7 +33,7 @@ async def upload_video(
 
 
 @router.get("/download")
-async def download(file_id: int, req: Request):
+async def download_file(file_id: int, req: Request):
     user = getUserInfo(req)
     user_id = user["user_id"]
 

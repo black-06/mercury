@@ -46,5 +46,5 @@ async def update_model(model_id: int, body: UpdateModelReqBody):
 
 
 @router.delete("/{model_id}")
-async def update_model(model_id: int):
+async def delete_model(model_id: int):
     return await modelModel.delete_model(model_id)

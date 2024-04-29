@@ -26,5 +26,5 @@ async def update_task(task_id: int, task: taskModel.Task):
 
 
 @router.delete("/{task_id}")
-async def update_task(task_id: int):
+async def delete_task(task_id: int):
     return await taskModel.delete_task(task_id)
