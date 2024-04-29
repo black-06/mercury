@@ -17,3 +17,6 @@ async def save_file(
 
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(upload_file.file, buffer)
+
+def get_file_absolute_path(file_path: str):
+    return os.path.join(WORKSPACE, file_path)

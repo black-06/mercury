@@ -8,11 +8,12 @@ from pydantic import BaseModel
 import requests
 from starlette.responses import FileResponse
 from infra.config import AZURE_SPEECH_KEY, AZURE_SPEECH_REGION
+from infra.file import get_file_absolute_path
 from middleware.auth import getUserInfo
 from infra.logger import logger
-from models.file import create_file
-from models.task import TaskStatus, create_task, update_task
-from models.model import query_model
+from models.file import create_file, query_file
+from models.task import Task, TaskStatus, create_task, update_task
+from models.model import query_model, Model
 from utils.file import createDir
 
 
@@ -65,7 +66,9 @@ async def infer_audio(
         file_path = await azure_tts(text, audio_profile, output_dir)
     else:
         file_path = await rvc_infer(
-            audio_path, model.audio_model, os.path.join(output_dir, f"{task.id}.wav", model.audio_config["pitch"])
+            audio_path,
+            model.audio_model,
+            os.path.join(output_dir, f"{task.id}.wav", model.audio_config["pitch"]),
         )
     return FileResponse(file_path)
 
@@ -128,16 +131,70 @@ async def rvc_infer(audio_path: str, model_name: str, output_path: str, pitch: i
 
 
 @router.post("/video")
-async def infer_video(user: str, model_id: str, task: str):
-    return PlainTextResponse("WIP")
+async def infer_video(
+    model_name: str,
+    file_id: int,
+    req: Request,
+):
+    models = await query_model(name=model_name)
+    model = models[0]
+
+    if model is None:
+        raise HTTPException(status_code=404, detail=f"model {model_name} not found")
+
+    audio_file = await query_file(file_id)
+    if audio_file is None:
+        raise HTTPException(status_code=404, detail=f"file {file_id} not found")
+
+    user = getUserInfo(req)
+
+    task = await create_task()
+
+    output_dir_path = gen_output_dir(model.name, user["user_id"], task.id)
+
+    output_video_path = os.path.join(output_dir_path, f"{task.id}.mp4")
+
+    video_file = await create_file(output_video_path, user["user_id"])
+
+    await update_task(
+        task.id,
+        status=TaskStatus.PENDING,
+        res={
+            "input_audio_file_id": audio_file.id,
+            "output_video_file_id": video_file.id,
+        },
+    )
+
+    # infer video asyncously
+    internal_infer_video(get_file_absolute_path(audio_file.path), model, output_video_path, task)
+
+    return JSONResponse(
+        {
+            "task_id": task.id,
+        }
+    )
+
+
+def internal_infer_video(
+    audio_path: str, model: Model, output_video_path: str, task: Task
+):
+    logger.debug(f"audio_path: {audio_path}, output_video_path: {output_video_path}, model: {model.name}, task_id: {task.id}")
     response = requests.post(
-        "http://127.0.0.1:8000/talking-head/inference",
+        "http://0.0.0.0:8000/talking-head/inference",
         json={
-            "path": f"/data/talking_prod/{user}/{model_id}/generated/{task}/gen-hr.wav"
+            "input_audio_path": audio_path,
+            "output_video_path": output_video_path,
+            "speaker": model.video_model,
+            "callback_url": f"http://0.0.0.0:3333/internal/task/{task.id}",
+            "callback_method": "put",
         },
         headers={"Content-Type": "application/json"},
     )
-    return FileResponse(response.json()["path"])
+
+    if not response.ok:
+        raise HTTPException(status_code=response.status_code, detail=response.json())
+
+    logger.debug(f"response code: {response.status_code}")
 
 
 class Config:
@@ -172,37 +229,26 @@ async def infer_text2video(body: Text2VideoRequest, req: Request):
     output_video_path = os.path.join(output_dir_path, f"{task.id}.mp4")
     output_audio_path = os.path.join(output_dir_path, f"{task.id}.wav")
 
-    file = await create_file(output_video_path, user["user_id"])
+    audio_file = await create_file(output_audio_path, user["user_id"])
+    video_file = await create_file(output_video_path, user["user_id"])
 
     await update_task(
         task.id,
         status=TaskStatus.PENDING,
         res={
-            "output_video_file_id": file.id,
+            "output_audio_file_id": audio_file.id,
+            "output_video_file_id": video_file.id,
         },
     )
 
     file_path = await azure_tts(body.text, body.audio_profile, output_dir_path)
 
-    file_path = await rvc_infer(file_path, model.audio_model, output_audio_path, model.audio_config["pitch"])
-
-    # infer video asyncously
-    response = requests.post(
-        "http://0.0.0.0:8000/talking-head/inference",
-        json={
-            "input_audio_path": file_path,
-            "output_video_path": output_video_path,
-            "speaker": model.video_model,
-            "callback_url": f"http://0.0.0.0:3333/internal/task/{task.id}",
-            "callback_method": "put",
-        },
-        headers={"Content-Type": "application/json"},
+    file_path = await rvc_infer(
+        file_path, model.audio_model, output_audio_path, model.audio_config["pitch"]
     )
 
-    if not response.ok:
-        raise HTTPException(status_code=response.status_code, detail=response.json())
-
-    logger.debug(f"response code: {response.status_code}")
+    # infer video asyncously
+    internal_infer_video(file_path, model, output_video_path, task)
 
     return JSONResponse(
         {
