@@ -5,10 +5,15 @@ import jwt
 _secret_key = "mercurymercury"
 _redis_key = "mercury_token"
 _algorithm = "HS256"
+_expire_time = 7 * 24 * 60 * 60
+
+
+def gen_token_key(user_id: int):
+    return f"{_redis_key}_{user_id}"
 
 
 def get_token(user_id: int):
-    return r.hget(_redis_key, user_id)
+    return r.get(gen_token_key(user_id))
 
 
 def gen_token(user_id: int, username: str):
@@ -22,11 +27,11 @@ def gen_token(user_id: int, username: str):
 
 
 def set_token(user_id: int, token: str):
-    return r.hset(_redis_key, str(user_id), token)
+    return r.set(gen_token_key(user_id), token, ex=_expire_time)
 
 
 def clear_token(user_id: int):
-    return r.hdel(_redis_key, str(user_id))
+    return r.delete(gen_token_key(user_id))
 
 
 def check_token(token: str):
