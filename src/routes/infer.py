@@ -255,3 +255,55 @@ async def infer_text2video(body: Text2VideoRequest, req: Request):
             "task_id": task.id,
         }
     )
+
+
+class Text2AudioRequest(BaseModel):
+    class Config(Config):
+        pass
+
+    text: str
+    model_name: str
+    audio_profile: str = "zh-CN-YunxiNeural (Male)"
+
+
+
+
+@router.post("/text2audio")
+async def infer_text2audio(body: Text2AudioRequest, req: Request):
+    user = getUserInfo(req)
+    logger.debug("user: %s", user)
+
+    models = await query_model(name=body.model_name)
+    model = models[0]
+    if model is None:
+        raise HTTPException(
+            status_code=404, detail=f"model {body.model_name} not found"
+        )
+
+    task = await create_task()
+
+    output_dir_path = gen_output_dir(model.name, user["user_id"], task.id)
+
+    output_audio_path = os.path.join(output_dir_path, f"{task.id}.wav")
+
+    audio_file = await create_file(output_audio_path, user["user_id"])
+
+    await update_task(
+        task.id,
+        status=TaskStatus.PENDING,
+        res={
+            "output_audio_file_id": audio_file.id,
+        },
+    )
+
+    file_path = await azure_tts(body.text, body.audio_profile, output_dir_path)
+
+    file_path = await rvc_infer(
+        file_path, model.audio_model, output_audio_path, model.audio_config["pitch"]
+    )
+
+    return JSONResponse(
+        {
+            "task_id": task.id,
+        }
+    )
