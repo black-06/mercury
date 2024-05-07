@@ -35,7 +35,7 @@ def gen_output_dir(model: str, user_id: int, task_id: int):
     return output_dir_path
 
 
-@router.post("/audio")
+@router.post("/audio", include_in_schema=False)
 async def infer_audio(
     req: Request,
     text: Optional[str] = None,

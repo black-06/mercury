@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, UploadFile
+from fastapi import APIRouter, HTTPException, Request, UploadFile
 from urllib.parse import quote
 import os
 from starlette.responses import FileResponse
@@ -39,10 +39,10 @@ async def download_file(file_id: int, req: Request):
 
     res = await FileModel.query_file(file_id)
     if not res:
-        return {"message": "file not found"}
+        raise HTTPException(status_code=404, detail="file not found")
 
     if res.user_id != user_id:
-        return {"message": "no permission"}
+        raise HTTPException(status_code=403, detail="no permission")
     base_name = os.path.basename(res.path)
     encoded_basename = quote(base_name)
 
