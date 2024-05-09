@@ -8,9 +8,8 @@ WORKSPACE = "/data/prod"
 
 async def save_file(
     upload_file: UploadFile,
-    work_path: str,
+    file_path: str,
 ):
-    file_path = os.path.join(WORKSPACE, work_path)
     file_dir = os.path.dirname(file_path)
 
     createDir(file_dir)

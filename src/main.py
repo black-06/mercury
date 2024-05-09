@@ -8,6 +8,7 @@ from routes.file import router as fileRouter
 from routes.user import router as userRouter
 from routes.internal import router as internalRouter
 from routes.model import router as modelRouter
+from routes.train import router as trainRouter
 
 
 @asynccontextmanager
@@ -28,3 +29,4 @@ app.include_router(fileRouter)
 app.include_router(userRouter)
 app.include_router(internalRouter)
 app.include_router(modelRouter)
+app.include_router(trainRouter)

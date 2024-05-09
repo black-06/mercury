@@ -14,6 +14,7 @@ from infra.logger import logger
 from models.file import create_file, query_file
 from models.task import Task, TaskStatus, create_task, update_task
 from models.model import query_model, Model
+from routes.common import CommonSchemaConfig
 from utils.file import createDir
 
 
@@ -166,7 +167,9 @@ async def infer_video(
     )
 
     # infer video asyncously
-    internal_infer_video(get_file_absolute_path(audio_file.path), model, output_video_path, task)
+    internal_infer_video(
+        get_file_absolute_path(audio_file.path), model, output_video_path, task
+    )
 
     return JSONResponse(
         {
@@ -178,7 +181,9 @@ async def infer_video(
 def internal_infer_video(
     audio_path: str, model: Model, output_video_path: str, task: Task
 ):
-    logger.debug(f"audio_path: {audio_path}, output_video_path: {output_video_path}, model: {model.name}, task_id: {task.id}")
+    logger.debug(
+        f"audio_path: {audio_path}, output_video_path: {output_video_path}, model: {model.name}, task_id: {task.id}"
+    )
     response = requests.post(
         "http://0.0.0.0:8000/talking-head/inference",
         json={
@@ -197,12 +202,8 @@ def internal_infer_video(
     logger.debug(f"response code: {response.status_code}")
 
 
-class Config:
-    protected_namespaces = ()
-
-
 class Text2VideoRequest(BaseModel):
-    class Config(Config):
+    class Config(CommonSchemaConfig):
         pass
 
     text: str
@@ -258,14 +259,12 @@ async def infer_text2video(body: Text2VideoRequest, req: Request):
 
 
 class Text2AudioRequest(BaseModel):
-    class Config(Config):
+    class Config(CommonSchemaConfig):
         pass
 
     text: str
     model_name: str
     audio_profile: str = "zh-CN-YunxiNeural (Male)"
-
-
 
 
 @router.post("/text2audio")

@@ -8,11 +8,10 @@ class Model(ormar.Model):
 
     id: Optional[int] = ormar.Integer(primary_key=True, autoincrement=True)
     name: Optional[str] = ormar.String(max_length=100, unique=True)
-    audio_model: Optional[str] = ormar.String(max_length=100)
+    audio_model: Optional[str] = ormar.String(default="", max_length=100)
     audio_config: any = ormar.JSON(default={})
-    video_model: Optional[str] = ormar.String(max_length=100)
+    video_model: Optional[str] = ormar.String(default="", max_length=100)
     video_config: any = ormar.JSON(default={})
-
 
 
 def query_model(name: Optional[str] = None, model_id: Optional[int] = None):

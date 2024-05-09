@@ -21,6 +21,7 @@ async def upload_video(
     user_id = user["user_id"]
 
     raw_dir_path = os.path.join(
+        WORKSPACE,
         str(user_id),
         model_name,
         "_raw",
@@ -47,7 +48,7 @@ async def download_file(file_id: int, req: Request):
     encoded_basename = quote(base_name)
 
     return FileResponse(
-        os.path.join(WORKSPACE, res.path),
+        res.path,
         media_type="application/octet-stream",
         filename=encoded_basename,
     )
