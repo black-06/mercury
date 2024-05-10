@@ -3,7 +3,7 @@ import os
 import shutil
 from typing import List, Optional
 from fastapi import APIRouter, Request
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 import requests
 from middleware.auth import getUserInfo
@@ -113,6 +113,9 @@ async def train_audio_model(
 
     # update task status after request completed
     asyncio.create_task(train_request(body, task, model, ref_dir_name))
- 
 
-    return PlainTextResponse("traing started")
+    return JSONResponse(
+        {
+            "task_id": task.id,
+        }
+    )
