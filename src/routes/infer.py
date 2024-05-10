@@ -48,7 +48,8 @@ async def infer_audio(
     models = await query_model(name=model_name)
     model = models[0]
     if model is None:
-        raise HTTPException(status_code=404, detail=f"model {model_name} not found")
+        raise HTTPException(
+            status_code=404, detail=f"model {model_name} not found")
 
     user = getUserInfo(req)
     task = await create_task()
@@ -69,7 +70,8 @@ async def infer_audio(
         file_path = await rvc_infer(
             audio_path,
             model.audio_model,
-            os.path.join(output_dir, f"{task.id}.wav", model.audio_config["pitch"]),
+            os.path.join(output_dir, f"{task.id}.wav",
+                         model.audio_config["pitch"]),
         )
     return FileResponse(file_path)
 
@@ -103,7 +105,8 @@ async def azure_tts(text: str, audio_profile: str, output_dir: str):
         return file_path
     elif speech_synthesis_result.reason == speechsdk.ResultReason.Canceled:
         cancellation_details = speech_synthesis_result.cancellation_details
-        print("Speech synthesis canceled: {}".format(cancellation_details.reason))
+        print("Speech synthesis canceled: {}".format(
+            cancellation_details.reason))
         if cancellation_details.reason == speechsdk.CancellationReason.Error:
             if cancellation_details.error_details:
                 raise HTTPException(
@@ -127,11 +130,16 @@ async def rvc_infer(audio_path: str, model_name: str, output_path: str, pitch: i
         + str(pitch),
     )
     if not response.ok:
-        raise HTTPException(status_code=response.status_code, detail=response.text)
+        raise HTTPException(
+            status_code=response.status_code, detail=response.text)
     return response.json()
 
 
-@router.post("/video")
+class InferVideoResponse(BaseModel):
+    task_id: int
+
+
+@router.post("/video", response_model=InferVideoResponse)
 async def infer_video(
     model_name: str,
     file_id: int,
@@ -141,11 +149,13 @@ async def infer_video(
     model = models[0]
 
     if model is None:
-        raise HTTPException(status_code=404, detail=f"model {model_name} not found")
+        raise HTTPException(
+            status_code=404, detail=f"model {model_name} not found")
 
     audio_file = await query_file(file_id)
     if audio_file is None:
-        raise HTTPException(status_code=404, detail=f"file {file_id} not found")
+        raise HTTPException(
+            status_code=404, detail=f"file {file_id} not found")
 
     user = getUserInfo(req)
 
@@ -197,7 +207,8 @@ def internal_infer_video(
     )
 
     if not response.ok:
-        raise HTTPException(status_code=response.status_code, detail=response.json())
+        raise HTTPException(status_code=response.status_code,
+                            detail=response.json())
 
     logger.debug(f"response code: {response.status_code}")
 
@@ -211,7 +222,11 @@ class Text2VideoRequest(BaseModel):
     audio_profile: str = "zh-CN-YunxiNeural (Male)"
 
 
-@router.post("/text2video")
+class Text2VideoResponse(BaseModel):
+    task_id: int
+
+
+@router.post("/text2video", response_model=Text2VideoResponse)
 async def infer_text2video(body: Text2VideoRequest, req: Request):
     user = getUserInfo(req)
     logger.debug("user: %s", user)
@@ -267,7 +282,11 @@ class Text2AudioRequest(BaseModel):
     audio_profile: str = "zh-CN-YunxiNeural (Male)"
 
 
-@router.post("/text2audio")
+class Text2AudioResponse(BaseModel):
+    task_id: int
+
+
+@router.post("/text2audio", response_model=Text2AudioResponse)
 async def infer_text2audio(body: Text2AudioRequest, req: Request):
     user = getUserInfo(req)
     logger.debug("user: %s", user)

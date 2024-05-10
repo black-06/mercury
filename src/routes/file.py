@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Request, UploadFile
+from fastapi import APIRouter, HTTPException, Request, Response, UploadFile
 from urllib.parse import quote
 import os
 from starlette.responses import FileResponse
@@ -11,7 +11,7 @@ router = APIRouter(
 )
 
 
-@router.post("/upload")
+@router.post("/upload", response_model=FileModel.File)
 async def upload_video(
     file: UploadFile,
     model_name: str,
@@ -32,8 +32,11 @@ async def upload_video(
     await save_file(file, file_path)
     return await FileModel.create_file(file_path, user_id)
 
+class DownloadResponse(Response):
+    media_type = "application/octet-stream"
+    schema = {}
 
-@router.get("/download")
+@router.get("/download", response_class=DownloadResponse)
 async def download_file(file_id: int, req: Request):
     user = getUserInfo(req)
     user_id = user["user_id"]
