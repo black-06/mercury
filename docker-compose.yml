@@ -7,7 +7,7 @@ services:
     container_name: mercury_db
     environment:
       MYSQL_DATABASE: mercury
-      MYSQL_ROOT_PASSWORD: mercury
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
     volumes:
       - db_data:/var/lib/mysql
       - ./conf.d:/etc/mysql/conf.d
@@ -20,7 +20,7 @@ services:
       - redis_data:/data
     ports:
       - "6345:6345"
-    command: --port 6345 --requirepass mercury
+    command: --port 6345 --requirepass ${REDIS_PASSWORD}
   mercury:
     image: mercury:latest
     restart: always
