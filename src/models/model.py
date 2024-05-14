@@ -1,9 +1,9 @@
 from typing import Any, Optional
 import ormar
-from infra.db import base_ormar_config
+from infra.db import BaseModel, base_ormar_config
 
 
-class Model(ormar.Model):
+class Model(BaseModel):
     ormar_config = base_ormar_config.copy(tablename="model")
 
     id: Optional[int] = ormar.Integer(primary_key=True, autoincrement=True)

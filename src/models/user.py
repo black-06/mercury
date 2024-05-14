@@ -1,10 +1,10 @@
 from typing import Any, Optional
 import ormar
-from infra.db import base_ormar_config
+from infra.db import BaseModel, base_ormar_config
 from infra.token import get_token, gen_token, set_token
 
 
-class User(ormar.Model):
+class User(BaseModel):
     ormar_config = base_ormar_config.copy(tablename="user")
 
     id: Optional[int] = ormar.Integer(primary_key=True, autoincrement=True)

@@ -1,7 +1,7 @@
 import datetime
 from typing import Any, Optional
 import ormar
-from infra.db import database, metadata, base_ormar_config
+from infra.db import BaseModel, base_ormar_config
 from enum import Enum
 
 
@@ -12,7 +12,7 @@ class TaskStatus(int, Enum):
     FAILED = 3
 
 
-class Task(ormar.Model):
+class Task(BaseModel):
     ormar_config = base_ormar_config.copy(tablename="task")
 
     id: Optional[int] = ormar.Integer(primary_key=True, autoincrement=True)

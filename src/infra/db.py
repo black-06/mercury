@@ -1,3 +1,4 @@
+import datetime
 import databases
 import ormar
 import sqlalchemy
@@ -12,3 +13,10 @@ base_ormar_config = ormar.OrmarConfig(
     metadata=metadata,
     engine=engine,
 )
+
+
+class BaseModel(ormar.Model):
+    ormar_config = base_ormar_config.copy(abstract=True)
+
+    create_time: datetime.datetime = ormar.DateTime(
+        default=datetime.datetime.now)

@@ -1,9 +1,9 @@
 from enum import Enum
 from typing import Optional
-from infra.db import base_ormar_config
+from infra.db import BaseModel, base_ormar_config
 import ormar
 
-class File(ormar.Model):
+class File(BaseModel):
     ormar_config = base_ormar_config.copy(tablename="file")
 
     id: int = ormar.Integer(primary_key=True, autoincrement=True)
