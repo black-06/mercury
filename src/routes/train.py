@@ -2,7 +2,7 @@ import asyncio
 import os
 import shutil
 from typing import List, Optional
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 import requests
@@ -113,6 +113,74 @@ async def train_audio_model(
 
     # update task status after request completed
     asyncio.create_task(train_request(body, task, model, ref_dir_name))
+
+    return JSONResponse(
+        {
+            "task_id": task.id,
+        }
+    )
+
+class TrainVideoRequestBody(BaseModel):
+    class Config(CommonSchemaConfig):
+        pass
+
+    model_name: str
+    speaker: str
+    file_ids: List[int]
+
+@router.post("/video_model")
+async def train_video_model(
+    req: Request,
+    body: TrainVideoRequestBody,
+):
+    user = getUserInfo(req)
+
+    models = await query_model(name=body.model_name)
+
+    task = await create_task()
+    model = None
+    if len(models) == 0:
+        model = await create_model(name=body.model_name)
+    else:
+        model = models[0]
+
+    await update_model(model.id, video_model=body.speaker)
+
+    ref_dir_name = os.path.join(
+        "/home/chaiyujin/talking-head-v0.1/user-data/clip",
+        body.speaker,
+    )
+
+    # delete ref_dir_name
+    shutil.rmtree(ref_dir_name, ignore_errors=True)
+
+    createDir(ref_dir_name)
+
+    count = 0
+
+    for file_id in body.file_ids:
+        file = await query_file(file_id)
+        file_name = str(count).zfill(2) + ".mp4"
+        new_file_path = os.path.join(ref_dir_name, file_name)
+        shutil.copy(file.path, new_file_path)
+        count = count + 1
+
+    # query request
+    response = requests.post(
+        "http://0.0.0.0:8000/talking-head/train",
+        json={
+            "speaker": body.speaker,
+            "callback_url": f"http://0.0.0.0:3333/internal/task/{task.id}",
+            "callback_method": "put",
+        },
+        headers={"Content-Type": "application/json"},
+    )
+
+    if not response.ok:
+        raise HTTPException(status_code=response.status_code,
+                            detail=response.json())
+
+    logger.debug(f"response code: {response.status_code}")
 
     return JSONResponse(
         {
