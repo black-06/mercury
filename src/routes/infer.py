@@ -320,6 +320,11 @@ async def infer_text2audio(body: Text2AudioRequest, req: Request):
         file_path, model.audio_model, output_audio_path, model.audio_config["pitch"]
     )
 
+    await update_task(
+        task.id,
+        status=TaskStatus.SUCCEEDED,
+    )
+
     return JSONResponse(
         {
             "task_id": task.id,
