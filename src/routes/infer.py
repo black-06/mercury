@@ -134,6 +134,20 @@ async def rvc_infer(audio_path: str, model_name: str, output_path: str, pitch: i
             status_code=response.status_code, detail=response.text)
     return response.json()
 
+async def gpt_infer(text: str, model_name: str, output_path: str):
+    response = requests.post(
+        "http://127.0.0.1:9880/infer",
+        json={
+            "text": text,
+            "model_name": model_name,
+            "output_path": output_path
+        },
+        headers={"Content-Type": "application/json"},
+    )
+    if not response.ok:
+        raise HTTPException(
+            status_code=response.status_code, detail=response.text)
+    return response.json()
 
 class InferVideoResponse(BaseModel):
     task_id: int
@@ -220,6 +234,7 @@ class Text2VideoRequest(BaseModel):
     text: str
     model_name: str
     audio_profile: str = "zh-CN-YunxiNeural (Male)"
+    mode: int = 1 # 1 for azure, 2 for gpt
 
 
 class Text2VideoResponse(BaseModel):
@@ -257,11 +272,14 @@ async def infer_text2video(body: Text2VideoRequest, req: Request):
         },
     )
 
-    file_path = await azure_tts(body.text, body.audio_profile, output_dir_path)
+    if body.mode == 2:
+        await gpt_infer(body.text, model.name, output_audio_path)
+    else:
+        file_path = await azure_tts(body.text, body.audio_profile, output_dir_path)
 
-    file_path = await rvc_infer(
-        file_path, model.audio_model, output_audio_path, model.audio_config["pitch"]
-    )
+        file_path = await rvc_infer(
+            file_path, model.audio_model, output_audio_path, model.audio_config["pitch"]
+        )
 
     # infer video asyncously
     internal_infer_video(file_path, model, output_video_path, task)
@@ -280,7 +298,7 @@ class Text2AudioRequest(BaseModel):
     text: str
     model_name: str
     audio_profile: str = "zh-CN-YunxiNeural (Male)"
-
+    mode: int = 1 # 1 for azure, 2 for gpt
 
 class Text2AudioResponse(BaseModel):
     task_id: int
@@ -314,11 +332,13 @@ async def infer_text2audio(body: Text2AudioRequest, req: Request):
         },
     )
 
-    file_path = await azure_tts(body.text, body.audio_profile, output_dir_path)
-
-    file_path = await rvc_infer(
-        file_path, model.audio_model, output_audio_path, model.audio_config["pitch"]
-    )
+    if body.mode == 2:
+        await gpt_infer(body.text, model.name, output_audio_path)
+    else:
+        file_path = await azure_tts(body.text, body.audio_profile, output_dir_path)
+        file_path = await rvc_infer(
+            file_path, model.audio_model, output_audio_path, model.audio_config["pitch"]
+        )
 
     await update_task(
         task.id,
