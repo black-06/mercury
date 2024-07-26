@@ -349,7 +349,8 @@ async def infer_text2audio(body: Text2AudioRequest, req: Request):
     )
 
     if body.mode == 2:
-        file_path = await gpt_infer(body.text, model.name, output_audio_path)
+        file_path = await cosy_infer(body.text, model.name, output_audio_path)
+        # file_path = await gpt_infer(body.text, model.name, output_audio_path)
     else:
         file_path = await azure_tts(body.text, body.audio_profile, output_dir_path)
         file_path = await rvc_infer(
