@@ -4,7 +4,7 @@ import uuid
 from fastapi import APIRouter, Request, HTTPException
 import azure.cognitiveservices.speech as speechsdk
 from fastapi.responses import JSONResponse, PlainTextResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import requests
 from starlette.responses import FileResponse
 from infra.config import AZURE_SPEECH_KEY, AZURE_SPEECH_REGION
@@ -16,12 +16,13 @@ from models.task import Task, TaskStatus, create_task, update_task
 from models.model import query_model, Model
 from routes.common import CommonSchemaConfig
 from utils.file import createDir
-
+import models.file as FileModel
 
 router = APIRouter(
     prefix="/infer",
 )
 
+ASR_MODEL_NAME = "Asr2srt"
 
 def gen_output_dir(model: str, user_id: int, task_id: int):
     output_dir_path = os.path.join(
@@ -164,6 +165,21 @@ async def cosy_infer(text: str, model_name: str, output_path: str):
             status_code=response.status_code, detail=response.text)
     return output_path
 
+async def srt_infer(audio_path: str, output_path: str, text: str = ""):
+    response = requests.post(
+        "http://127.0.0.1:3336/audio/gen_audio_srt",
+        json={
+            "ref_text": text,
+            "audio_file": audio_path,
+            "output_path": output_path,
+        },
+        headers={"Content-Type": "application/json"},
+    )
+    if not response.ok:
+        raise HTTPException(
+            status_code=response.status_code, detail=response.text)
+    return output_path
+
 class InferVideoResponse(BaseModel):
     task_id: int
 
@@ -250,6 +266,10 @@ class Text2VideoRequest(BaseModel):
     model_name: str
     audio_profile: str = "zh-CN-YunxiNeural (Male)"
     mode: int = 1 # 1 for azure, 2 for gpt
+    gen_srt: bool = Field(
+        False, 
+        description="是否同步生成字幕文件，默认不生成。若为True,将在任务详情中返回 res.output_srt_file_id"
+    ) # 是否同步生成 字幕文件
 
 
 class Text2VideoResponse(BaseModel):
@@ -277,6 +297,13 @@ async def infer_text2video(body: Text2VideoRequest, req: Request):
 
     audio_file = await create_file(output_audio_path, user["user_id"])
     video_file = await create_file(output_video_path, user["user_id"])
+    
+    srt_file_id = 0
+    if body.gen_srt:
+        output_srt_path = os.path.join(output_dir_path, f"{task.id}.srt")
+        srt_file = await create_file(output_srt_path, user["user_id"])
+        srt_file_id = srt_file.id
+    
 
     await update_task(
         task.id,
@@ -284,6 +311,7 @@ async def infer_text2video(body: Text2VideoRequest, req: Request):
         res={
             "output_audio_file_id": audio_file.id,
             "output_video_file_id": video_file.id,
+            "output_srt_file_id": srt_file_id,
         },
     )
 
@@ -296,6 +324,9 @@ async def infer_text2video(body: Text2VideoRequest, req: Request):
         file_path = await rvc_infer(
             file_path, model.audio_model, output_audio_path, model.audio_config["pitch"]
         )
+
+    if body.gen_srt:
+        await srt_infer(file_path, output_srt_path, body.text)
 
     # infer video asyncously
     internal_infer_video(file_path, model, output_video_path, task)
@@ -315,6 +346,10 @@ class Text2AudioRequest(BaseModel):
     model_name: str
     audio_profile: str = "zh-CN-YunxiNeural (Male)"
     mode: int = 1 # 1 for azure, 2 for gpt
+    gen_srt: bool = Field(
+        False, 
+        description="是否同步生成字幕文件，默认不生成。若为True,将在任务详情中返回 res.output_srt_file_id"
+    ) # 是否同步生成 字幕文件
 
 class Text2AudioResponse(BaseModel):
     task_id: int
@@ -339,12 +374,22 @@ async def infer_text2audio(body: Text2AudioRequest, req: Request):
     output_audio_path = os.path.join(output_dir_path, f"{task.id}.wav")
 
     audio_file = await create_file(output_audio_path, user["user_id"])
+    
+    srt_file_id = 0
+    if body.gen_srt:
+        output_srt_path = os.path.join(output_dir_path, f"{task.id}.srt")
+        print(user)
+        print("userid", user["user_id"])
+        
+        srt_file = await create_file(output_srt_path, user["user_id"])
+        srt_file_id = srt_file.id
 
     await update_task(
         task.id,
         status=TaskStatus.PENDING,
         res={
             "output_audio_file_id": audio_file.id,
+            "output_srt_file_id": srt_file_id,
         },
     )
 
@@ -356,12 +401,68 @@ async def infer_text2audio(body: Text2AudioRequest, req: Request):
         file_path = await rvc_infer(
             file_path, model.audio_model, output_audio_path, model.audio_config["pitch"]
         )
+        
+    if body.gen_srt:
+        await srt_infer(file_path, output_srt_path, body.text)
 
     await update_task(
         task.id,
         status=TaskStatus.SUCCEEDED,
     )
 
+    return JSONResponse(
+        {
+            "task_id": task.id,
+        }
+    )
+
+class AudioAsrRequest(BaseModel):
+    class Config(CommonSchemaConfig):
+        pass
+
+    text: str = Field(
+        "",
+        description="音频的原始文案信息，需要与音频内容一致，否则会导致错误。若不提供，将会尝试推理音频内容，部分文案会出错。执行成功后，可在任务详情查看res.output_srt_file_id"
+    )
+    file_id: int = Field(
+        description="音频id"
+    )
+    
+class Audio2AsrResponse(BaseModel):
+    task_id: int
+    
+    
+@router.post("/audio2srt", response_model=Audio2AsrResponse)
+async def infer_asr(body: AudioAsrRequest, req: Request):
+    user = getUserInfo(req)
+    user_id = user["user_id"]
+    logger.debug("user: %s", user)
+    
+
+    res = await FileModel.query_file(body.file_id)
+    if not res:
+        raise HTTPException(status_code=404, detail="file not found")
+
+    if res.user_id != user_id:
+        raise HTTPException(status_code=403, detail="no permission")
+    audio_path = res.path
+    
+    task = await create_task()
+    output_srt_dir_path = gen_output_dir(ASR_MODEL_NAME, user["user_id"], task.id)
+    output_srt_path = os.path.join(output_srt_dir_path, f"{task.id}.srt")
+    
+    srt_file = await create_file(output_srt_path, user["user_id"])
+    
+    await update_task(
+        task.id,
+        status=TaskStatus.PENDING,
+        res={
+            "output_srt_file_id": srt_file.id,
+        },
+    )
+    
+    await srt_infer(audio_path, output_srt_path, body.text)
+    
     return JSONResponse(
         {
             "task_id": task.id,
