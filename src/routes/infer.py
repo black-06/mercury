@@ -17,6 +17,7 @@ from models.model import query_model, Model
 from routes.common import CommonSchemaConfig
 from utils.file import createDir
 import models.file as FileModel
+from enum import Enum
 
 router = APIRouter(
     prefix="/infer",
@@ -257,6 +258,9 @@ def internal_infer_video(
 
     logger.debug(f"response code: {response.status_code}")
 
+class AudioMode(int, Enum):
+    RVC = 1
+    COSYVOICE = 2
 
 class Text2VideoRequest(BaseModel):
     class Config(CommonSchemaConfig):
@@ -265,7 +269,7 @@ class Text2VideoRequest(BaseModel):
     text: str
     model_name: str
     audio_profile: str = "zh-CN-YunxiNeural (Male)"
-    mode: int = 1 # 1 for azure, 2 for gpt
+    mode: AudioMode = AudioMode.RVC
     gen_srt: bool = Field(
         False, 
         description="是否同步生成字幕文件，默认不生成。若为True,将在任务详情中返回 res.output_srt_file_id"
@@ -315,7 +319,7 @@ async def infer_text2video(body: Text2VideoRequest, req: Request):
         },
     )
 
-    if body.mode == 2:
+    if body.mode == AudioMode.COSYVOICE:
         # file_path = await gpt_infer(body.text, model.name, output_audio_path)
         file_path = await cosy_infer(body.text, model.name, output_audio_path)
     else:
@@ -345,7 +349,7 @@ class Text2AudioRequest(BaseModel):
     text: str
     model_name: str
     audio_profile: str = "zh-CN-YunxiNeural (Male)"
-    mode: int = 1 # 1 for azure, 2 for gpt
+    mode: AudioMode = AudioMode.RVC # 1 for azure, 2 for gpt
     gen_srt: bool = Field(
         False, 
         description="是否同步生成字幕文件，默认不生成。若为True,将在任务详情中返回 res.output_srt_file_id"
@@ -378,8 +382,6 @@ async def infer_text2audio(body: Text2AudioRequest, req: Request):
     srt_file_id = 0
     if body.gen_srt:
         output_srt_path = os.path.join(output_dir_path, f"{task.id}.srt")
-        print(user)
-        print("userid", user["user_id"])
         
         srt_file = await create_file(output_srt_path, user["user_id"])
         srt_file_id = srt_file.id
@@ -393,7 +395,7 @@ async def infer_text2audio(body: Text2AudioRequest, req: Request):
         },
     )
 
-    if body.mode == 2:
+    if body.mode == AudioMode.COSYVOICE:
         file_path = await cosy_infer(body.text, model.name, output_audio_path)
         # file_path = await gpt_infer(body.text, model.name, output_audio_path)
     else:
@@ -429,6 +431,7 @@ class AudioAsrRequest(BaseModel):
     )
     
 class Audio2AsrResponse(BaseModel):
+    output_srt_file_id: int
     task_id: int
     
     
@@ -455,7 +458,7 @@ async def infer_asr(body: AudioAsrRequest, req: Request):
     
     await update_task(
         task.id,
-        status=TaskStatus.PENDING,
+        status=TaskStatus.SUCCEEDED,
         res={
             "output_srt_file_id": srt_file.id,
         },
@@ -466,5 +469,6 @@ async def infer_asr(body: AudioAsrRequest, req: Request):
     return JSONResponse(
         {
             "task_id": task.id,
+            "output_srt_file_id": srt_file.id,
         }
     )
