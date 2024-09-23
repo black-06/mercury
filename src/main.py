@@ -13,7 +13,7 @@ from routes.model import router as modelRouter
 from routes.train import router as trainRouter
 
 from task.infer_http import infer_text2audio_queue, infer_audio2video_queue, infer_text2video_queue
-from routes.train import train_audio_queue, train_video_queue
+from task.train_http import train_audio_queue, train_video_queue
 
 current_path = os.path.abspath(__file__)
 project_root = os.path.dirname(current_path)
