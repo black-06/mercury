@@ -10,6 +10,8 @@ from middleware.auth import getUserInfo
 from models.file import query_file
 from models.model import create_model, query_model, update_model
 from routes.common import CommonSchemaConfig
+from task.infer import celery_enabled
+from task.train import publish_audio_train_task, publish_video_train_task
 from task.train_http import train_audio_queue, TrainAudioTask, train_video_queue, TrainVideoTask
 from utils.file import createDir
 
@@ -36,12 +38,15 @@ async def train_audio_model(
     user = getUserInfo(req)
 
     models = await query_model(name=body.model_name)
-    model = None
     if len(models) == 0:
         model = await create_model(name=body.model_name)
     else:
         model = models[0]
     await update_model(model.id, audio_model=body.model_name + ".pth")
+
+    if celery_enabled:
+        rst = publish_audio_train_task([str(fid) for fid in body.file_ids], body.model_name, body.epoch)
+        return JSONResponse({"task_id": rst.id})
 
     ref_dir_name = os.path.join(
         "/home/ubuntu/Projects/Retrieval-based-Voice-Conversion-WebUI/reference",
@@ -81,14 +86,15 @@ async def train_video_model(
     user = getUserInfo(req)
 
     models = await query_model(name=body.model_name)
-
-    model = None
     if len(models) == 0:
         model = await create_model(name=body.model_name)
     else:
         model = models[0]
-
     await update_model(model.id, video_model=body.speaker)
+
+    if celery_enabled:
+        rst = publish_video_train_task([str(fid) for fid in body.file_ids], body.speaker)
+        return JSONResponse({"task_id": rst.id})
 
     ref_dir_name = os.path.join(
         "/home/chaiyujin/talking-head-v0.1/user-data/clip",
