@@ -12,6 +12,7 @@ from models.file import create_file, query_file
 from models.model import query_model
 from models.task import TaskStatus, create_task, update_task
 from routes.common import CommonSchemaConfig
+from task.infer import publish_talking_head_infer_task, celery_enabled, publish_text2video_task, publish_text2audio_task
 from task.infer_http import (
     AudioModeType,
     infer_text2video_queue,
@@ -104,6 +105,11 @@ async def infer_video(
         raise HTTPException(status_code=404, detail=f"file {file_id} not found")
 
     user = getUserInfo(req)
+
+    if celery_enabled and audio_file.cos:
+        rst = publish_talking_head_infer_task(str(audio_file.id), model.video_model)
+        return JSONResponse({"task_id": rst.id})
+
     task = await infer_audio2video_queue.append(
         InferAudio2VideoPayload(
             model_name=model_name,
@@ -155,6 +161,18 @@ async def infer_text2video(body: Text2VideoRequest, req: Request):
     model = models[0]
     if model is None:
         raise HTTPException(status_code=404, detail=f"model {body.model_name} not found")
+
+    if celery_enabled:
+        rst = publish_text2video_task(
+            model_type=body.mode,
+            text=body.text,
+            model_name=body.model_name,
+            audio_profile=body.audio_profile,
+            pitch=model.audio_config.get("pitch", 0),
+            speaker=model.video_model,
+            gen_srt=body.gen_srt,
+        )
+        return JSONResponse({"task_id": rst.id})
 
     task = await infer_text2video_queue.append(
         InferText2VideoPayload(
@@ -219,6 +237,18 @@ async def infer_text2audio(body: Text2AudioRequest, req: Request):
     model = models[0]
     if model is None:
         raise HTTPException(status_code=404, detail=f"model {body.model_name} not found")
+
+    if celery_enabled:
+        rst = publish_text2audio_task(
+            model_type=body.mode,
+            text=body.text,
+            model_name=body.model_name,
+            audio_profile=body.audio_profile,
+            pitch=model.audio_config.get("pitch", 0),
+            gen_srt=body.gen_srt,
+        )
+        return JSONResponse({"task_id": rst.id})
+
 
     task = await infer_text2audio_queue.append(
         InferText2AudioPayload(

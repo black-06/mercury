@@ -1,4 +1,3 @@
-from enum import Enum
 from typing import Optional
 from infra.db import BaseModel, base_ormar_config
 import ormar
@@ -9,6 +8,7 @@ class File(BaseModel):
     id: int = ormar.Integer(primary_key=True, autoincrement=True)
     path: str = ormar.String(max_length=255, nullable=False)
     user_id: int = ormar.Integer(foreign_key=True, nullable=False)
+    cos: bool = ormar.Boolean(default=True, nullable=False)
 
 def query_file(
     file_id: Optional[int],
