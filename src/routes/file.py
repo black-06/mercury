@@ -1,12 +1,9 @@
-import os
-from urllib.parse import quote
-
-from fastapi import APIRouter, HTTPException, Request, Response, UploadFile
-from starlette.responses import FileResponse, RedirectResponse
+from fastapi import APIRouter, HTTPException, Request, UploadFile
+from starlette.responses import Response, RedirectResponse
 
 from infra.file import upload_cos, get_cos_download_url
 from middleware.auth import getUserInfo
-from models.file import create_file, File
+from models.file import File, create_file
 
 router = APIRouter(
     prefix="/file",
@@ -16,13 +13,12 @@ router = APIRouter(
 @router.post("/upload", response_model=File)
 async def upload_video(
     file: UploadFile,
-    model_name: str,
     req: Request,
 ):
     user = getUserInfo(req)
     user_id = user["user_id"]
 
-    file_model = await create_file(file.filename, user_id)
+    file_model = await create_file(name=file.filename, user_id=user_id)
     upload_cos(file_model.id, file)
     return file_model
 
@@ -37,21 +33,9 @@ async def download_file(file_id: int, req: Request):
     user = getUserInfo(req)
     user_id = user["user_id"]
 
-    res = await FileModel.query_file(file_id)
-    if not res:
+    file: File = File.objects.filter(id=file_id, user_id=user_id).first()
+    if not file:
         raise HTTPException(status_code=404, detail="file not found")
 
-    if res.user_id != user_id:
-        raise HTTPException(status_code=403, detail="no permission")
-
-    if res.cos:
-        url = get_cos_download_url(res.id, res.path)
-        return RedirectResponse(url=url)
-    else:
-        base_name = os.path.basename(res.path)
-        encoded_basename = quote(base_name)
-        return FileResponse(
-            res.path,
-            media_type="application/octet-stream",
-            filename=encoded_basename,
-        )
+    url = get_cos_download_url(file.id, file.name)
+    return RedirectResponse(url=url)
