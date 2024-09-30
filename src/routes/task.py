@@ -1,7 +1,8 @@
 from typing import List, Optional
-from fastapi import APIRouter
-import models.task as taskModel
 
+from fastapi import APIRouter
+
+import models.task as taskModel
 
 router = APIRouter(
     prefix="/tasks",

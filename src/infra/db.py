@@ -1,8 +1,10 @@
 import datetime
+
 import databases
 import ormar
 import sqlalchemy
-from infra.config import DATABASE_URL
+
+from config import DATABASE_URL
 
 database = databases.Database(DATABASE_URL)
 metadata = sqlalchemy.MetaData()
@@ -17,6 +19,4 @@ base_ormar_config = ormar.OrmarConfig(
 
 class BaseModel(ormar.Model):
     ormar_config = base_ormar_config.copy(abstract=True)
-
-    create_time: datetime.datetime = ormar.DateTime(
-        default=datetime.datetime.now)
+    create_time: datetime.datetime = ormar.DateTime(default=datetime.datetime.now)

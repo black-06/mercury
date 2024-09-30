@@ -1,5 +1,7 @@
 from typing import Any, Optional
+
 import ormar
+
 from infra.db import BaseModel, base_ormar_config
 
 
@@ -8,9 +10,9 @@ class Model(BaseModel):
 
     id: Optional[int] = ormar.Integer(primary_key=True, autoincrement=True)
     name: Optional[str] = ormar.String(max_length=100, unique=True)
-    audio_model: Optional[str] = ormar.String(default="", max_length=100)
+    audio_model: Optional[str] = ormar.String(default="", max_length=100, description="RVC model path")
     audio_config: any = ormar.JSON(default={})
-    video_model: Optional[str] = ormar.String(default="", max_length=100)
+    video_model: Optional[str] = ormar.String(default="", max_length=100, description="talking head model path")
     video_config: any = ormar.JSON(default={})
 
 

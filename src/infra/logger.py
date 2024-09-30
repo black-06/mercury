@@ -1,10 +1,11 @@
 import logging
 import sys
 
+
 class ColoredFormatter(logging.Formatter):
     COLOR_CODE = {
         logging.DEBUG: "\033[94m",  # Blue
-        logging.INFO: "\033[92m",   # Green
+        logging.INFO: "\033[92m",  # Green
         logging.WARNING: "\033[93m",  # Yellow
         logging.ERROR: "\033[91m",  # Red
         logging.CRITICAL: "\033[95m",  # Magenta
@@ -15,6 +16,7 @@ class ColoredFormatter(logging.Formatter):
         color = self.COLOR_CODE.get(record.levelno)
         message = super().format(record)
         return f"{color}{message}{self.RESET_CODE}"
+
 
 logger = logging.getLogger("mercury")
 logger.setLevel(logging.DEBUG)

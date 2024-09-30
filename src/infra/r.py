@@ -1,6 +1,6 @@
 from redis import Redis
 from urllib.parse import urlparse
-from infra.config import REDIS_URL
+from config import REDIS_URL
 
 parsed_url = urlparse(REDIS_URL)
 

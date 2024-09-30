@@ -1,5 +1,7 @@
 from typing import Any, Optional
+
 import ormar
+
 from infra.db import BaseModel, base_ormar_config
 from infra.token import get_token, gen_token, set_token
 

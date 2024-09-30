@@ -1,14 +1,14 @@
 import os
 from typing import List, Optional
 from urllib.parse import quote
+
 from fastapi import APIRouter, HTTPException, Response
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from infra.file import WORKSPACE
-import models.model as modelModel
-import models.file as fileModel
-from infra.logger import logger
 
+import models.model as modelModel
+from infra.logger import logger
+from models.file import WORKSPACE, query_file
 
 router = APIRouter(
     prefix="/models",
@@ -29,9 +29,7 @@ class CreateModelReqBody(BaseModel):
 
 @router.post("", response_model=modelModel.Model)
 async def create_model(body: CreateModelReqBody):
-    return await modelModel.create_model(
-        name=body.name, audio_model=body.audio_model, video_model=body.video_model
-    )
+    return await modelModel.create_model(name=body.name, audio_model=body.audio_model, video_model=body.video_model)
 
 
 class UpdateModelReqBody(BaseModel):
@@ -61,9 +59,7 @@ class ImageResponse(Response):
 
 
 @router.get("/preview_image", response_class=ImageResponse)
-async def get_preview_image(
-    model_id: Optional[int] = None, model_name: Optional[str] = None
-):
+async def get_preview_image(model_id: Optional[int] = None, model_name: Optional[str] = None):
     res = await modelModel.query_model(name=model_name, model_id=model_id)
     model = res[0]
     if model is None:
@@ -72,12 +68,11 @@ async def get_preview_image(
     logger.debug(model.video_config)
 
     if "preview_image_id" not in model.video_config:
-        raise HTTPException(
-            status_code=404, detail="preview_image_id not found")
+        raise HTTPException(status_code=404, detail="preview_image_id not found")
 
     file_id = model.video_config["preview_image_id"]
 
-    file = await fileModel.query_file(file_id)
+    file = await query_file(file_id)
 
     if file is None:
         raise HTTPException(status_code=404, detail="File not found")

@@ -1,6 +1,8 @@
-from infra.r import r
 from datetime import datetime, timedelta
+
 import jwt
+
+from r import r
 
 _secret_key = "mercurymercury"
 _redis_key = "mercury_token"

@@ -1,8 +1,10 @@
 import datetime
-from typing import Any, Optional
-import ormar
-from infra.db import BaseModel, base_ormar_config
 from enum import Enum
+from typing import Any, Optional
+
+import ormar
+
+from infra.db import BaseModel, base_ormar_config
 
 
 class TaskStatus(int, Enum):
@@ -39,4 +41,3 @@ async def create_task():
 async def update_task(task_id: int, **kwargs: Any):
     t = await Task.objects.get(id=task_id)
     return await t.update(**kwargs)
-

@@ -1,22 +1,17 @@
-from fastapi.responses import JSONResponse
-import jwt
-from starlette.middleware.base import BaseHTTPMiddleware
-from fastapi import Request, status
-from infra.token import check_token, decode_token
-from infra.logger import logger
 import re
+
+import jwt
+from fastapi import Request, status
+from fastapi.responses import JSONResponse
+from infra.token import check_token, decode_token
+from starlette.middleware.base import BaseHTTPMiddleware
 
 
 def getUserInfo(request: Request):
     return getattr(request.state, "user", None)
 
 
-noAuthPath = [
-    "/openapi.json",
-    "/user/login",
-    "/docs",
-    "/internal.*"
-]
+noAuthPath = ["/openapi.json", "/user/login", "/docs", "/internal.*"]
 
 
 class AuthMiddleware(BaseHTTPMiddleware):

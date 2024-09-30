@@ -1,9 +1,8 @@
-from typing import Optional
 from fastapi import APIRouter
+from pydantic import BaseModel
+
 import models.task as taskModel
 from infra.logger import logger
-from pydantic import BaseModel, Field
-
 
 router = APIRouter(
     prefix="/internal",
