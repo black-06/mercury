@@ -1,4 +1,5 @@
 import os
+import uuid
 from typing import Optional
 
 from fastapi import APIRouter, Request, HTTPException
@@ -8,11 +9,11 @@ from starlette.responses import FileResponse
 
 from infra.logger import logger
 from middleware.auth import getUserInfo
-from models.file import create_file, query_file
+from models.file import create_cos_file, query_file, File
 from models.model import query_model
 from models.task import TaskStatus, create_task, update_task
 from routes.common import CommonSchemaConfig
-from task.infer import publish_talking_head_infer_task, celery_enabled, publish_text2video_task, publish_text2audio_task
+from task.infer import publish_talking_head_infer_task, celery_enabled, publish_text_task
 from task.infer_http import (
     AudioModeType,
     infer_text2video_queue,
@@ -105,22 +106,27 @@ async def infer_video(
         raise HTTPException(status_code=404, detail=f"file {file_id} not found")
 
     user = getUserInfo(req)
+    user_id = user["user_id"]
 
     if celery_enabled and audio_file.cos:
-        rst = publish_talking_head_infer_task(str(audio_file.id), model.video_model)
+        output_video_name = f"{uuid.uuid4().hex}.mp4"
+        output_video_key = f"infer/{output_video_name}"
+        await create_cos_file(output_video_name, output_video_key, user_id)
+        rst = publish_talking_head_infer_task(str(audio_file.id), model.video_model, output_video_key)
         return JSONResponse({"task_id": rst.id})
 
     task = await infer_audio2video_queue.append(
         InferAudio2VideoPayload(
             model_name=model_name,
             audio_id=file_id,
-            user_id=user["user_id"],
+            user_id=user_id,
         ).to_json()
     )
 
-    output_dir_path = gen_output_dir(model.name, user["user_id"], task.id)
-    output_video_path = os.path.join(output_dir_path, f"{task.id}.mp4")
-    video_file = await create_file(output_video_path, user["user_id"])
+    output_dir_path = gen_output_dir(model.name, user_id, task.id)
+    output_video_name = f"{task.id}.mp4"
+    output_video_path = os.path.join(output_dir_path, output_video_name)
+    video_file = await create_cos_file(output_video_name, output_video_path, user_id)
     await update_task(
         task.id,
         res={
@@ -154,6 +160,7 @@ class Text2VideoResponse(BaseModel):
 async def infer_text2video(body: Text2VideoRequest, req: Request):
     user = getUserInfo(req)
     logger.debug("user: %s", user)
+    user_id = user["user_id"]
 
     models = await query_model(name=body.model_name)
     if len(models) == 0:
@@ -163,14 +170,37 @@ async def infer_text2video(body: Text2VideoRequest, req: Request):
         raise HTTPException(status_code=404, detail=f"model {body.model_name} not found")
 
     if celery_enabled:
-        rst = publish_text2video_task(
-            model_type=body.mode,
+        uid = uuid.uuid4().hex
+        output_audio_name, output_video_name = f"{uid}.wav", f"{uid}.mp4"
+        output_audio_cos, output_video_cos = f"infer/{output_audio_name}", f"infer/{output_video_name}"
+        outputs = [
+            File(name=output_audio_name, key=output_audio_cos, user_id=user_id),
+            File(name=output_video_name, key=output_video_cos, user_id=user_id),
+        ]
+        if body.mode == AudioModeType.RVC:
+            azure_output_audio_name = f"{uid}.azure.wav"
+            azure_output_audio_cos = f"infer/{azure_output_audio_name}"
+            outputs.append(File(name=azure_output_audio_name, key=azure_output_audio_cos, user_id=user_id))
+        else:
+            azure_output_audio_cos = None
+        if body.gen_srt:
+            output_srt_name = f"{uid}.srt"
+            output_srt_cos = f"infer/{output_srt_name}"
+            outputs.append(File(name=output_srt_name, key=output_srt_cos, user_id=user_id))
+        else:
+            output_srt_cos = None
+        File.objects.bulk_create(outputs)
+
+        rst = publish_text_task(
             text=body.text,
             model_name=body.model_name,
-            audio_profile=body.audio_profile,
+            output_audio_cos=output_audio_cos,
+            azure_audio_profile=body.audio_profile,
+            azure_output_audio_cos=azure_output_audio_cos,
             pitch=model.audio_config.get("pitch", 0),
             speaker=model.video_model,
-            gen_srt=body.gen_srt,
+            output_video_cos=output_video_cos,
+            output_srt_cos=output_srt_cos,
         )
         return JSONResponse({"task_id": rst.id})
 
@@ -181,20 +211,23 @@ async def infer_text2video(body: Text2VideoRequest, req: Request):
             audio_profile=body.audio_profile,
             mode=body.mode,
             gen_srt=body.gen_srt,
-            user_id=user["user_id"],
+            user_id=user_id,
         ).to_json()
     )
     task_id = task.id
-    output_dir_path = gen_output_dir(model.name, user["user_id"], task_id)
-    output_video_path = os.path.join(output_dir_path, f"{task_id}.mp4")
-    output_audio_path = os.path.join(output_dir_path, f"{task_id}.wav")
-    audio_file = await create_file(output_audio_path, user["user_id"])
-    video_file = await create_file(output_video_path, user["user_id"])
+    output_dir_path = gen_output_dir(model.name, user_id, task_id)
+    output_video_name = f"{task_id}.mp4"
+    output_video_path = os.path.join(output_dir_path, output_video_name)
+    output_audio_name = f"{task_id}.wav"
+    output_audio_path = os.path.join(output_dir_path, output_audio_name)
+    video_file = await create_cos_file(output_video_name, output_video_path, user_id)
+    audio_file = await create_cos_file(output_audio_name, output_audio_path, user_id)
 
     srt_file_id = 0
     if body.gen_srt:
-        output_srt_path = os.path.join(output_dir_path, f"{task_id}.srt")
-        srt_file = await create_file(output_srt_path, user["user_id"])
+        output_srt_name = f"{task_id}.srt"
+        output_srt_path = os.path.join(output_dir_path, output_srt_name)
+        srt_file = await create_cos_file(output_srt_name, output_srt_path, user_id)
         srt_file_id = srt_file.id
     await update_task(
         task_id,
@@ -233,22 +266,44 @@ class Text2AudioResponse(BaseModel):
 async def infer_text2audio(body: Text2AudioRequest, req: Request):
     user = getUserInfo(req)
     logger.debug("user: %s", user)
+    user_id = user["user_id"]
+
     models = await query_model(name=body.model_name)
     model = models[0]
     if model is None:
         raise HTTPException(status_code=404, detail=f"model {body.model_name} not found")
 
     if celery_enabled:
-        rst = publish_text2audio_task(
-            model_type=body.mode,
+        uid = uuid.uuid4().hex
+        output_audio_name = f"{uid}.wav"
+        output_audio_cos = f"infer/{output_audio_name}"
+        outputs = [
+            File(name=output_audio_name, key=output_audio_cos, user_id=user_id),
+        ]
+        if body.mode == AudioModeType.RVC:
+            azure_output_audio_name = f"{uid}.azure.wav"
+            azure_output_audio_cos = f"infer/{azure_output_audio_name}"
+            outputs.append(File(name=azure_output_audio_name, key=azure_output_audio_cos, user_id=user_id))
+        else:
+            azure_output_audio_cos = None
+        if body.gen_srt:
+            output_srt_name = f"{uid}.srt"
+            output_srt_cos = f"infer/{output_srt_name}"
+            outputs.append(File(name=output_srt_name, key=output_srt_cos, user_id=user_id))
+        else:
+            output_srt_cos = None
+        rst = publish_text_task(
             text=body.text,
             model_name=body.model_name,
-            audio_profile=body.audio_profile,
+            output_audio_cos=output_audio_cos,
+            azure_audio_profile=body.audio_profile,
+            azure_output_audio_cos=azure_output_audio_cos,
             pitch=model.audio_config.get("pitch", 0),
-            gen_srt=body.gen_srt,
+            speaker=None,
+            output_video_cos=None,
+            output_srt_cos=output_srt_cos,
         )
         return JSONResponse({"task_id": rst.id})
-
 
     task = await infer_text2audio_queue.append(
         InferText2AudioPayload(
@@ -263,12 +318,14 @@ async def infer_text2audio(body: Text2AudioRequest, req: Request):
 
     task_id = task.id
     output_dir_path = gen_output_dir(body.model_name, user["user_id"], task_id)
-    output_audio_path = os.path.join(output_dir_path, f"{task_id}.wav")
-    audio_file = await create_file(output_audio_path, user["user_id"])
+    output_audio_name = f"{task_id}.wav"
+    output_audio_path = os.path.join(output_dir_path, output_audio_name)
+    audio_file = await create_cos_file(output_audio_name, output_audio_path, user["user_id"])
     srt_file_id = 0
     if body.gen_srt:
-        output_srt_path = os.path.join(output_dir_path, f"{task_id}.srt")
-        srt_file = await create_file(output_srt_path, user["user_id"])
+        output_srt_name = f"{task_id}.srt"
+        output_srt_path = os.path.join(output_dir_path, output_srt_name)
+        srt_file = await create_cos_file(output_srt_name, output_srt_path, user["user_id"])
         srt_file_id = srt_file.id
 
     await update_task(
@@ -318,9 +375,9 @@ async def infer_asr(body: AudioAsrRequest, req: Request):
 
     task = await create_task()
     output_srt_dir_path = gen_output_dir(ASR_MODEL_NAME, user["user_id"], task.id)
-    output_srt_path = os.path.join(output_srt_dir_path, f"{task.id}.srt")
-
-    srt_file = await create_file(output_srt_path, user["user_id"])
+    output_srt_name = f"{task.id}.srt"
+    output_srt_path = os.path.join(output_srt_dir_path, output_srt_name)
+    srt_file = await create_cos_file(output_srt_name, output_srt_path, user["user_id"])
 
     await update_task(
         task.id,

@@ -1,9 +1,11 @@
-from fastapi import APIRouter, HTTPException, Request, UploadFile
-from starlette.responses import Response, RedirectResponse
+import shutil
+import uuid
 
-from infra.file import upload_cos, get_cos_download_url
+from fastapi import APIRouter, HTTPException, Request, UploadFile
+from starlette.responses import Response, RedirectResponse, FileResponse
+
 from middleware.auth import getUserInfo
-from models.file import File, create_file
+from models.file import File, get_cos_download_url, create_cos_file, get_local_path, upload_cos_file
 
 router = APIRouter(
     prefix="/file",
@@ -16,10 +18,15 @@ async def upload_video(
     req: Request,
 ):
     user = getUserInfo(req)
-    user_id = user["user_id"]
-
-    file_model = await create_file(name=file.filename, user_id=user_id)
-    upload_cos(file_model.id, file)
+    key = f"upload/{uuid.uuid4().hex}"
+    # write to local
+    dest = get_local_path(key)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    with dest.open("wb") as writer:
+        shutil.copyfileobj(file.file, writer)
+    # create and upload
+    file_model = await create_cos_file(file.filename, key, user["user_id"])
+    upload_cos_file(file_model)
     return file_model
 
 
@@ -37,5 +44,12 @@ async def download_file(file_id: int, req: Request):
     if not file:
         raise HTTPException(status_code=404, detail="file not found")
 
-    url = get_cos_download_url(file.id, file.name)
-    return RedirectResponse(url=url)
+    file_path = get_local_path(file.key)
+    if not file_path.exists():
+        return RedirectResponse(url=get_cos_download_url(file))
+
+    return FileResponse(
+        file_path,
+        media_type="application/octet-stream",
+        filename=file.name,
+    )
